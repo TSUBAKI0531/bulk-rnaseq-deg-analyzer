@@ -139,6 +139,33 @@ Sample_4,Treatment
 
 > HUGO 遺伝子シンボル（TP53, BRCA1 等）を使うと Enrichr API で本物の GO 解析が動作します。TSV 形式（`.tsv`）にも対応しており、拡張子で自動判定します。
 
+### Streamlit Cloud デプロイ
+
+1. このリポジトリを GitHub にプッシュ
+2. [share.streamlit.io](https://share.streamlit.io) に GitHub アカウントでログイン
+3. **New app** → リポジトリ / ブランチ (`main`) / メインファイル (`rnaseq_deg_app.py`) を指定
+4. **Deploy!** をクリック
+
+初回デプロイは pyDESeq2 のビルドに **3〜5 分**かかります。`packages.txt` に記載された `build-essential` / `gfortran` / `libopenblas-dev` が pyDESeq2 の C 拡張コンパイルに必要なシステムライブラリで、Streamlit Cloud が自動インストールします。
+
+### Docker での実行
+
+```dockerfile
+FROM python:3.10-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y build-essential gfortran libopenblas-dev
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8501
+CMD ["streamlit", "run", "rnaseq_deg_app.py", "--server.address", "0.0.0.0"]
+```
+
+```bash
+docker build -t rnaseq-deg-analyzer .
+docker run -p 8501:8501 rnaseq-deg-analyzer
+```
+
 ---
 
 ## 設計上の工夫
@@ -166,6 +193,17 @@ Heatmap は log₂(CPM+1) でライブラリサイズ差を補正した後、行
 - **多群比較対応** — pyDESeq2 の Likelihood Ratio Test を利用した 3 群以上の比較と pairwise contrast 出力に拡張
 - **バッチ効果補正の統合** — ComBat / Harmony を前処理ステップとして組み込み、多施設・多バッチの RNA-seq データに対応
 - **Plotly インタラクティブ図** — マウスオーバーで遺伝子情報（機能 / OMIM）を表示するインタラクティブ版へ切替
+
+---
+
+## Troubleshooting
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| `ModuleNotFoundError: pydeseq2` | `requirements.txt` に `pydeseq2>=0.4.0` がない | `requirements.txt` を確認して再デプロイ |
+| Streamlit Cloud でビルドエラー | C 拡張コンパイル用システムライブラリが不足 | `packages.txt` に `build-essential` / `gfortran` / `libopenblas-dev` があるか確認 |
+| メモリ不足でアプリがクラッシュ | Streamlit Cloud 無料枠のリソース制約 | デモデータの遺伝子数を 1000 に減らす（`generate_demo_data(n_genes=1000)`） |
+| Enrichr API 接続エラー | 一時的なネットワーク障害または API 側の不具合 | リトライで解消されることが多い。デモデータで動作確認してから再試行 |
 
 ---
 
