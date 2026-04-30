@@ -1,313 +1,180 @@
-# 🧬 RNA-seq DEG Analysis Pipeline
+# bulk-rnaseq-deg-analyzer
 
-> **Python-only RNA-seq differential expression analysis pipeline with automated visualization and pathway enrichment.**
+bulk RNA-seq カウントデータから差次発現遺伝子（DEG）を統計検定し、4種の標準可視化と GO エンリッチメント解析までを Python のみで一気通貫実行する Streamlit Web アプリ。
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-url.streamlit.app)
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B?logo=streamlit&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
-
-RNA-seq カウントデータから差次発現遺伝子（DEG）の統計検定、多角的な可視化、GO/KEGG パスウェイ解析までを **R を使わず Python だけで完結** する Web アプリケーションです。  
-デモデータ内蔵のため、実データがなくても即座に全機能を試すことができます。
+> **bulk RNA-seq 専用** — 組織・血液サンプル等の集団平均発現量を対象とした 2 群比較に特化しています。シングルセル RNA-seq（scRNA-seq）とは異なる統計モデルを使用しています。
 
 ---
 
-## Demo
+## 解決した課題
 
-<!-- デプロイ後、実際のスクリーンショットに差し替えてください -->
+RNA-seq 実験後に「どの遺伝子が有意に変動しているか」を調べるには、従来 R/DESeq2 + RStudio という独立した環境が必要で、ウェットラボ研究者には高い技術ハードルがあった。
 
-| Volcano Plot | MA Plot |
-|:---:|:---:|
-| ![Volcano](docs/screenshots/volcano_plot.png) | ![MA](docs/screenshots/ma_plot.png) |
-
-| Cluster Heatmap | PCA Plot |
-|:---:|:---:|
-| ![Heatmap](docs/screenshots/heatmap.png) | ![PCA](docs/screenshots/pca_plot.png) |
-
-| GO Enrichment Bar Plot | GO Enrichment Dot Plot |
-|:---:|:---:|
-| ![GO Bar](docs/screenshots/go_barplot.png) | ![GO Dot](docs/screenshots/go_dotplot.png) |
-
-> **💡 スクリーンショットの追加方法:**  
-> アプリをローカルで起動 → 各図を PNG ダウンロード → `docs/screenshots/` フォルダに配置してください。
+本ツールは **2群×3反復（Control 3 / Treatment 3）** という bulk RNA-seq の典型的な実験デザインに最適化し、低発現フィルタ → 正規化 → Wald 検定 → 多重検定補正（BH 法）という標準パイプラインを Python だけで自動実行する。さらに「この DEG 群は何に関わっているか」という生物学的解釈も、GO / KEGG パスウェイ解析まで同一ツール内で完結させた。
 
 ---
 
-## Features
+## 主要機能
 
-### 🔬 DEG 検定 — pyDESeq2
+- **DEG 統計検定（pyDESeq2）** — 負の二項分布モデルによる R/DESeq2 同等の精度。低発現フィルタ・正規化・BH 法多重検定補正を自動処理し、log2FoldChange / pvalue / padj を出力
+- **4種の標準可視化** — Volcano Plot（有意変動遺伝子の概観）/ MA Plot（低発現偽陽性チェック）/ Cluster Heatmap（上位 DEG の発現パターン + 階層クラスタリング）/ PCA Plot（サンプル品質評価・外れ値検出）
+- **GO / パスウェイ エンリッチメント解析** — gseapy を通じた Enrichr API 接続で GO BP / MF / CC / KEGG / Reactome / WikiPathway の 6 ライブラリに対して Over-Representation Analysis を実行。Up / Down / All DEG を方向別に解析
+- **インタラクティブなパラメータ調整** — adjusted p-value / |log2FC| 閾値・ヒートマップ表示遺伝子数・低発現フィルタをサイドバーからリアルタイムに変更可能
+- **デモデータ内蔵 + 全出力ダウンロード** — 実データ不要で全機能を即座に確認可能。DEG 結果 / GO 結果 CSV、Volcano / MA / Heatmap / PCA の PNG を個別ダウンロード
 
-R の DESeq2 と同等の負の二項分布モデルを Python で実行します。低発現遺伝子の自動フィルタリング、正規化、統計検定を一括処理します。
+---
 
-- 2群比較（Control vs Treatment）
-- adjusted p-value / log2 Fold Change の閾値をサイドバーからリアルタイム調整
-- 全結果を CSV でダウンロード可能
+## 技術スタック
 
-### 📊 4種の可視化を自動出力
-
-| 図 | 何がわかるか |
+| カテゴリ | 使用技術 |
 |---|---|
-| **Volcano Plot** | どの遺伝子が有意に変動したか（統計的有意性 × 変動量） |
-| **MA Plot** | 発現量と変動量の関係（低発現遺伝子の偽陽性チェックに有用） |
-| **Cluster Heatmap** | 上位 DEG の発現パターン（サンプル・遺伝子の階層クラスタリング付き） |
-| **PCA Plot** | サンプル間の全体的な類似性（品質評価・外れ値検出） |
-
-すべての図は上位 DEG の遺伝子名ラベルを自動表示し、PNG でダウンロードできます。
-
-### 🧩 GO エンリッチメント解析 — gseapy
-
-DEG リストに対して Over-Representation Analysis (ORA) を実行し、生物学的な意味づけを行います。
-
-- **6つの Gene Set ライブラリ**に対応:
-  GO Biological Process / Molecular Function / Cellular Component, KEGG, Reactome, WikiPathway
-- **Up / Down / All DEG をタブで切替**して方向別に解析
-- バープロット + ドットプロットで結果を可視化
-- Enrichr API 経由で最新のアノテーションデータを使用
-
-### ⚙️ インタラクティブなパラメータ調整
-
-サイドバーから以下をリアルタイムに変更可能です:
-
-- adjusted p-value 閾値 (0.001〜0.1)
-- |log2FC| 閾値 (0.5〜3.0)
-- ヒートマップ表示遺伝子数 (10〜100)
-- 低発現遺伝子フィルタ閾値
-- GO 解析: ライブラリ選択、表示数、p-value 閾値
+| Web UI | Streamlit — インタラクティブ GUI・session_state によるステート管理 |
+| DEG 検定 | pyDESeq2 — DESeq2 の Python 実装（負の二項分布 + Wald 検定 + BH 補正） |
+| パスウェイ解析 | gseapy — Enrichr API 経由の ORA（GO / KEGG / Reactome / WikiPathway）|
+| 可視化 | matplotlib（Volcano / MA / PCA）+ seaborn clustermap（階層クラスタリングヒートマップ）|
+| 次元削減 | scikit-learn — `PCA` + `StandardScaler` によるサンプル品質評価 |
+| データ処理 | pandas / numpy — CPM 正規化・Z-score 算出・統計量計算 |
+| インフラ | Streamlit Cloud — `packages.txt` により build-essential / gfortran / libopenblas-dev を自動インストール |
 
 ---
 
-## Architecture
+## アーキテクチャ
 
+```mermaid
+flowchart TD
+    subgraph INPUT["📂 Step 1: データ入力"]
+        A1["CSV アップロード\nカウントマトリクス + メタデータ"]
+        A2["デモデータ\n2000遺伝子 × 6サンプル\n負の二項分布でシミュレーション"]
+    end
+
+    subgraph DEG["🔬 Step 2: DEG 解析（pyDESeq2）"]
+        B1["低発現フィルタ\nsum count < 閾値"]
+        B2["正規化 + Wald 検定"]
+        B3["log2FC / pvalue / padj（BH法）\nUp / Down / NS に分類"]
+        B1 --> B2 --> B3
+    end
+
+    subgraph VIZ["📊 Step 3: 4種の可視化"]
+        C1["🌋 Volcano Plot\n有意変動遺伝子を色分け"]
+        C2["📈 MA Plot\n低発現偽陽性チェック"]
+        C3["🗺️ Cluster Heatmap\nZ-score + 階層クラスタリング"]
+        C4["📐 PCA Plot\nサンプル品質評価"]
+    end
+
+    subgraph ENRICH["🧩 Step 4: GO エンリッチメント解析"]
+        D1["gseapy → Enrichr API\nGO · KEGG · Reactome · WikiPathway"]
+        D2["Up / Down / All DEGs タブ別解析"]
+        D3["バープロット + ドットプロット"]
+        D1 --> D2 --> D3
+    end
+
+    subgraph OUT["📋 Step 5: 結果出力"]
+        E1["CSV: DEG結果 / GO結果"]
+        E2["PNG: 4図 + GO プロット"]
+    end
+
+    INPUT --> DEG
+    DEG --> VIZ
+    DEG --> ENRICH
+    VIZ --> OUT
+    ENRICH --> OUT
+
+    style INPUT fill:#EBF5FB,stroke:#2980B9
+    style DEG fill:#EAF9EA,stroke:#27AE60
+    style VIZ fill:#FEF9E7,stroke:#F39C12
+    style ENRICH fill:#F5EEF8,stroke:#8E44AD
+    style OUT fill:#FDEDEC,stroke:#E74C3C
 ```
-┌─────────────────────────────────────────────────┐
-│                  Streamlit UI                    │
-│  ┌───────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │ File      │  │ Sidebar  │  │ Results &    │  │
-│  │ Upload /  │  │ Params   │  │ Download     │  │
-│  │ Demo Data │  │ Control  │  │ (CSV + PNG)  │  │
-│  └─────┬─────┘  └────┬─────┘  └──────▲───────┘  │
-│        │              │               │          │
-│  ┌─────▼──────────────▼───────────────┤          │
-│  │         Analysis Engine            │          │
-│  │  ┌──────────┐  ┌───────────────┐   │          │
-│  │  │ pyDESeq2 │  │ scikit-learn  │   │          │
-│  │  │ DEG Test │  │ PCA           │   │          │
-│  │  └────┬─────┘  └───────┬───────┘   │          │
-│  │       │                │           │          │
-│  │  ┌────▼────────────────▼────────┐  │          │
-│  │  │   Visualization Layer        │  │          │
-│  │  │  matplotlib / seaborn        │  │          │
-│  │  │  Volcano, MA, Heatmap, PCA   │  │          │
-│  │  └──────────────────────────────┘  │          │
-│  │                                    │          │
-│  │  ┌──────────────────────────────┐  │          │
-│  │  │  gseapy (Enrichr API)        │──┘          │
-│  │  │  GO / KEGG / Reactome        │             │
-│  │  └──────────────────────────────┘             │
-│  └───────────────────────────────────────────────┘
-└─────────────────────────────────────────────────┘
-```
+
+本アプリは単一ファイル `rnaseq_deg_app.py`（約 775 行）で構成される。解析は `st.button` による明示的なトリガーで実行され、結果は `st.session_state` に保持されることでパラメータ変更時の再解析を防いでいる。
+
+| セクション | 役割 |
+|---|---|
+| サイドバー（全体） | DEG 解析 / GO 解析の全パラメータをレイアウト |
+| `generate_demo_data()` | 負の二項分布で 2000 遺伝子 × 6 サンプルを生成。先頭 50 遺伝子を Up-regulated、次の 50 を Down-regulated に設定し DEG 検出を保証 |
+| Step 2 解析ブロック | pyDESeq2 の `DeseqDataSet` / `DeseqStats` を呼び出し、結果を `session_state` に保存 |
+| Step 3 可視化ブロック | `session_state` 参照のみ。Heatmap は log₂CPM → Z-score、PCA は StandardScaler → PCA の 2 段階処理 |
+| `generate_mock_go_results()` | `Gene_XXXX` 形式検出時にモック GO 結果を生成（実在 GO タームを使用） |
+| `run_enrichr()` | 実 HUGO シンボル検出時の `gseapy.enrich()` API 呼び出し |
 
 ---
 
-## Quick Start
+## 使用方法
 
-### ローカル実行
+### セットアップ
 
 ```bash
-# 1. リポジトリをクローン
-git clone https://github.com/your-username/rnaseq-deg-analyzer.git
-cd rnaseq-deg-analyzer
+git clone https://github.com/TSUBAKI0531/bulk-rnaseq-deg-analyzer.git
+cd bulk-rnaseq-deg-analyzer
 
-# 2. 仮想環境を作成（Anaconda の場合）
-conda create -n rnaseq python=3.10 -y
-conda activate rnaseq
-
-# 3. ライブラリインストール
 pip install -r requirements.txt
 
-# 4. アプリ起動
 streamlit run rnaseq_deg_app.py
+# → http://localhost:8501
 ```
 
-ブラウザで `http://localhost:8501` が自動で開きます。  
-「デモデータを使用する」にチェックが入った状態で **▶ 解析を実行** をクリックすれば、全機能を確認できます。
+### デモ実行（実データ不要）
 
-### Streamlit Cloud で試す
+1. 「✅ デモデータを使用する」が ON の状態で **▶ 解析を実行** をクリック
+2. 2000 遺伝子 × 6 サンプル（Control 3 / Treatment 3）の合成データで全パイプラインが動作します
+3. GO エンリッチメント解析では `immune response` / `JAK-STAT cascade` 等の実在 GO タームを使ったモック結果を表示します
 
-デプロイ済みのアプリはこちらから利用できます:  
-👉 **[https://your-app-url.streamlit.app](https://your-app-url.streamlit.app)**
+### 実データ解析
 
----
-
-## Input Format
-
-本ツールは **2つの CSV ファイル** を入力として受け付けます。
-
-### 1. カウントマトリクス CSV
-
-行 = 遺伝子、列 = サンプルの整数カウント値。先頭列が遺伝子名（インデックス）です。  
-HUGO 遺伝子シンボル（TP53, BRCA1 等）を使用すると GO エンリッチメント解析が実データで動作します。
+**カウントマトリクス CSV**（行: 遺伝子名、列: サンプル名）
 
 ```csv
 ,Sample_1,Sample_2,Sample_3,Sample_4,Sample_5,Sample_6
 TP53,120,135,118,450,520,480
-BRCA1,80,92,75,210,245,198
 IL6,45,52,48,320,380,355
-MYC,200,180,210,95,88,102
 ```
 
-### 2. メタデータ CSV
-
-`sample` 列（カウントマトリクスのカラム名と一致）と `condition` 列を含みます。
+**メタデータ CSV**（`sample` 列と `condition` 列が必須）
 
 ```csv
 sample,condition
 Sample_1,Control
-Sample_2,Control
-Sample_3,Control
 Sample_4,Treatment
-Sample_5,Treatment
-Sample_6,Treatment
 ```
 
-> **📝 Note:** TSV（タブ区切り）にも対応しています。拡張子が `.tsv` であれば自動判定します。
+> HUGO 遺伝子シンボル（TP53, BRCA1 等）を使うと Enrichr API で本物の GO 解析が動作します。TSV 形式（`.tsv`）にも対応しており、拡張子で自動判定します。
 
 ---
 
-## Analysis Pipeline
+## 設計上の工夫
 
-```
-Step 1: データ入力
-  │  CSV アップロード or デモデータ（2000 遺伝子 × 6 サンプル）
-  ▼
-Step 2: DEG 解析 (pyDESeq2)
-  │  低発現フィルタ → 正規化 → 負の二項分布モデル → Wald 検定
-  │  → log2FoldChange, pvalue, padj を算出
-  ▼
-Step 3: 可視化（4種の図を自動生成）
-  │  ├── 🌋 Volcano Plot   — 有意な DEG を色分け表示
-  │  ├── 📈 MA Plot         — 発現量 vs 変動量の関係
-  │  ├── 🗺️ Cluster Heatmap — 上位 DEG の Z-score ヒートマップ
-  │  └── 📐 PCA Plot        — サンプル間の品質チェック
-  ▼
-Step 4: GO エンリッチメント解析 (gseapy → Enrichr API)
-  │  ├── ⬆️ Up-regulated DEGs
-  │  ├── ⬇️ Down-regulated DEGs
-  │  └── 🔄 All DEGs
-  │  各方向で バープロット + ドットプロット + テーブル を出力
-  ▼
-Step 5: 結果出力
-     ├── DEG 結果テーブル（インタラクティブ表示）
-     ├── CSV ダウンロード（DEG 結果 / GO 結果）
-     └── PNG ダウンロード（Volcano / MA / Heatmap / PCA / GO 図）
-```
+**bulk RNA-seq 特化の統計モデル**
+scRNA-seq 用の scanpy / Seurat とは異なり、組織・血液サンプルの集団平均発現を扱う bulk RNA-seq に設計された負の二項分布モデルを採用。pyDESeq2 は R 版 DESeq2 の統計的手法を Python で忠実に再実装しており、BH 法による多重検定補正まで同等の処理を保証している。
+
+**可視化の正規化戦略**
+Heatmap は log₂(CPM+1) でライブラリサイズ差を補正した後、行方向 Z-score でサンプル間の相対変動のみを映し出す。PCA は `StandardScaler` で各遺伝子の分散を均一化し、高発現遺伝子による軸の支配を防いでいる。
+
+**ボルカノ / MA プロットの補完設計**
+ボルカノプロットは「有意かつ変動量の大きな遺伝子」の把握、MA プロットは「低発現遺伝子での偽陽性チェック」という異なる目的を持つ。両プロットで同じ `color_map` と上位 10 遺伝子ラベルを共有し、読み手に一貫した視覚表現を提供している。
+
+**デモ / 実データの GO 解析自動切替**
+遺伝子名の先頭 10 件が `Gene_XXXX` 形式かを検出し、デモ時は実在 GO タームを使ったモック結果を返す。実データ（HUGO シンボル）では自動的に Enrichr API へ切り替わり、追加の設定なしに本物のアノテーションを取得する。
+
+**session_state による再解析の抑制**
+解析結果（`results_df`, `count_filtered`, `meta_subset`）を `st.session_state` に保持し、サイドバーのパラメータ変更では DEG 検定を再実行しない。パラメータに基づく色分けと閾値ラインのみが即時更新され、重い計算の不要な反復を回避している。
 
 ---
 
-## Tech Stack
+## 今後の拡張可能性
 
-| カテゴリ | ライブラリ | 役割 |
-|---------|-----------|------|
-| Web UI | **Streamlit** | インタラクティブ Web アプリケーション |
-| DEG 検定 | **pyDESeq2** | DESeq2 の Python 実装（負の二項分布モデル） |
-| パスウェイ解析 | **gseapy** | Enrichr API 経由の GO / KEGG / Reactome 解析 |
-| 可視化 | **matplotlib** | Volcano Plot, MA Plot, PCA Plot |
-| 可視化 | **seaborn** | 階層クラスタリング付きヒートマップ (clustermap) |
-| 次元削減 | **scikit-learn** | PCA（主成分分析） |
-| データ処理 | **pandas / numpy** | カウントデータの操作・正規化・統計量計算 |
+- **GSEA（ランクベース解析）対応** — 全遺伝子の log2FC をランクとして使う Gene Set Enrichment Analysis を追加し、DEG 閾値設定に依存しない解析へ
+- **多群比較対応** — pyDESeq2 の Likelihood Ratio Test を利用した 3 群以上の比較と pairwise contrast 出力に拡張
+- **バッチ効果補正の統合** — ComBat / Harmony を前処理ステップとして組み込み、多施設・多バッチの RNA-seq データに対応
+- **Plotly インタラクティブ図** — マウスオーバーで遺伝子情報（機能 / OMIM）を表示するインタラクティブ版へ切替
 
 ---
 
-## Project Structure
+## ライセンス
 
-```
-rnaseq-deg-analyzer/
-├── .streamlit/
-│   └── config.toml           # Streamlit テーマ・サーバー設定
-├── docs/
-│   └── screenshots/          # スクリーンショット格納用（任意）
-├── .gitignore
-├── LICENSE
-├── README.md
-├── packages.txt              # Streamlit Cloud 用システムライブラリ
-├── requirements.txt          # Python 依存パッケージ
-└── rnaseq_deg_app.py         # メインアプリケーション（約 770 行）
-```
+MIT License
 
 ---
-
-## Deployment
-
-### Streamlit Cloud（推奨）
-
-1. このリポジトリを GitHub にプッシュ
-2. [share.streamlit.io](https://share.streamlit.io) に GitHub アカウントでログイン
-3. 「**New app**」→ リポジトリ / ブランチ (`main`) / メインファイル (`rnaseq_deg_app.py`) を指定
-4. 「**Deploy!**」をクリック
-
-初回デプロイは pyDESeq2 のビルドに 3〜5 分かかります。  
-`packages.txt` により必要なシステムライブラリが自動インストールされます。
-
-### Docker（オプション）
-
-```dockerfile
-FROM python:3.10-slim
-WORKDIR /app
-RUN apt-get update && apt-get install -y build-essential gfortran libopenblas-dev
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8501
-CMD ["streamlit", "run", "rnaseq_deg_app.py", "--server.address", "0.0.0.0"]
-```
-
-```bash
-docker build -t rnaseq-deg-analyzer .
-docker run -p 8501:8501 rnaseq-deg-analyzer
-```
-
----
-
-## Roadmap
-
-- [ ] GSEA（Gene Set Enrichment Analysis）のランクベース解析対応
-- [ ] 多群比較（3群以上）への拡張
-- [ ] バッチ効果補正（ComBat 等）の統合
-- [ ] Plotly によるインタラクティブ図への切替
-- [ ] シングルセル RNA-seq 対応（scanpy 統合）
-
----
-
-## Background
-
-### なぜ Python で RNA-seq 解析なのか
-
-RNA-seq の差次発現解析は長年 R（DESeq2, edgeR）が標準でしたが、近年 **pyDESeq2** の登場により Python 単独での解析が実用レベルになりました。Python で統一するメリットは以下の通りです:
-
-- 機械学習・深層学習パイプラインとのシームレスな統合
-- Streamlit / Dash 等による Web アプリ化が容易
-- バイオインフォマティクスと創薬研究の橋渡し
-
-本ツールは、ウェットラボ研究者がドライ解析を自力で行えるよう、**コードを書かずに GUI で操作できる**ことを設計方針としています。
-
----
-
-## References
-
-- [pyDESeq2](https://github.com/owkin/PyDESeq2) — Owkin による DESeq2 の Python 実装
-- [gseapy](https://github.com/zqfang/GSEApy) — Enrichr / GSEA の Python ラッパー
-- [DESeq2 原著論文](https://doi.org/10.1186/s13059-014-0550-8) — Love, Huber & Anders (2014)
-- [Enrichr](https://maayanlab.cloud/Enrichr/) — Ma'ayan Lab の遺伝子セット解析ツール
-
----
-
-## License
-
-MIT License — 詳細は [LICENSE](LICENSE) を参照してください。
 
 ## Author
 
-**[Your Name]**  
-Bioinformatics / Antibody Drug Development  
-GitHub: [@your-username](https://github.com/your-username)
+GitHub: [@TSUBAKI0531](https://github.com/TSUBAKI0531)
